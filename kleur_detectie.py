@@ -103,3 +103,4 @@ while True:
 cap.release()
 cv2.destroyAllWindows()
 
+# even een test, om te kijken of ik dit goed begrijp.
