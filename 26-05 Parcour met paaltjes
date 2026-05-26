@@ -36,7 +36,7 @@ SHOW_PREVIEW = True         # zet op False voor max snelheid (race mode)
 MIN_CONTOUR_AREA = 300      # ruis filteren (pixels^2)
 STEER_FULL = 1.0            # vol sturen (pilaren)
 STEER_CORRECT = 0.4         # zachte correctie pilaar terug naar midden
-THROTTLE_DRIVE = 1.0        # rechtdoor
+THROTTLE_DRIVE = 0.6        # 1.0 rechtdoor
 THROTTLE_TURN = 0.5         # tijdens sturen langzamer
 
 # --- Blauwe lijn (baanrand) parameters ---
@@ -237,12 +237,15 @@ def control_thread():
 
         # ==========================
         # Rood detectie
+        # Parcour-paaltjes: standaard HSV 359 / 73% / 67%
+        # = OpenCV ~[179, 186, 171]. Rood wrapt rond 0/180,
+        # daarom twee ranges: een lage en een hoge Hue.
         # ==========================
-        lower_red1 = np.array([0, 100, 100])
+        lower_red1 = np.array([0, 100, 90])
         upper_red1 = np.array([10, 255, 255])
 
-        lower_red2 = np.array([170, 120, 120])
-        upper_red2 = np.array([180, 255, 255])
+        lower_red2 = np.array([165, 100, 90])
+        upper_red2 = np.array([179, 255, 255])
 
         mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
         mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
