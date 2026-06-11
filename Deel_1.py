@@ -43,6 +43,15 @@ STEER_LIMIT = 0.8          # HARDE servo-limiet! Nooit verder, anders kapot.
 THROTTLE_DRIVE = 1.0        # rechtdoor / geen bocht
 THROTTLE_TURN = 0.5         # tijdens sturen langzamer
 
+# --- Bocht-afronding ---
+# Als de kleuren uit beeld verdwijnen zit de auto vaak nog midden in de bocht.
+# Dan stuurt hij nog TURN_SLEEP seconden door in de laatst geziene richting
+# voordat hij teruggaat naar rechtdoor. Pas deze waarde aan om de bocht korter
+# of langer door te trekken.
+# LET OP: tijdens deze sleep blokkeert de control-thread; de auto verwerkt dan
+# even geen nieuwe frames. Houd de waarde daarom klein (orde 0.1 - 0.5 s).
+TURN_SLEEP = 0.3
+
 # ==========================
 # HSV kleurwaarden (opgemeten met hsv_kalibratie_dubbel.py, Blur=1)
 # OpenCV-schaal H 0-179, S/V 0-255
@@ -155,6 +164,10 @@ def mask_position(mask):
 # ==========================
 def control_thread():
 
+    # Laatst geziene bochtrichting onthouden voor de bocht-afronding.
+    # 0.0 = geen bocht (rechtdoor), -STEER_TURN = links, +STEER_TURN = rechts.
+    last_steer = 0.0
+
     while not stop_event.is_set():
 
         if frame_queue.empty():
@@ -210,20 +223,28 @@ def control_thread():
         throttle = THROTTLE_DRIVE
         action_label = "GEEN -> RECHTDOOR"
 
+        # Vlag: is er dit frame een geldige bocht-volgorde gezien?
+        valid_turn = False
+
         # Beide kleuren moeten zichtbaar zijn voor een geldige volgorde
         if blue_y is not None and orange_y is not None:
 
+            valid_turn = True
+
             if blue_y > orange_y:
                 # Blauw onder, oranje boven -> bocht naar LINKS
-                steering = STEER_TURN
+                steering = -STEER_TURN
                 throttle = THROTTLE_TURN
                 action_label = "BLAUW->ORANJE -> BOCHT LINKS"
 
             else:
                 # Oranje onder, blauw boven -> bocht naar RECHTS
-                steering = -STEER_TURN
+                steering = STEER_TURN
                 throttle = THROTTLE_TURN
                 action_label = "ORANJE->BLAUW -> BOCHT RECHTS"
+
+            # Richting onthouden voor de afronding straks
+            last_steer = steering
 
         # ==========================
         # HARDE SERVO-LIMIET - nooit verder dan +/- STEER_LIMIT (anders kapot!)
@@ -233,6 +254,30 @@ def control_thread():
         # Toepassen
         car.steering = steering
         motor_kit.motor3.throttle = throttle
+
+        # ==========================
+        # BOCHT-AFRONDING (sleep)
+        # Geen geldige volgorde dit frame, MAAR we waren net in een bocht
+        # (last_steer != 0). Dan nog TURN_SLEEP seconden doorsturen in de
+        # laatst geziene richting voordat we teruggaan naar rechtdoor.
+        # LET OP: tijdens de sleep blokkeert deze thread (auto verwerkt dan
+        # geen nieuwe frames). Daarom TURN_SLEEP klein houden.
+        # ==========================
+        if not valid_turn and last_steer != 0.0:
+
+            finish_steer = max(-STEER_LIMIT, min(STEER_LIMIT, last_steer))
+            car.steering = finish_steer
+            motor_kit.motor3.throttle = THROTTLE_TURN
+            action_label = "BOCHT AFRONDEN (sleep)"
+
+            time.sleep(TURN_SLEEP)
+
+            # Bocht is afgerond -> terug naar rechtdoor en richting vergeten
+            car.steering = 0.0
+            motor_kit.motor3.throttle = THROTTLE_DRIVE
+            steering = 0.0
+            throttle = THROTTLE_DRIVE
+            last_steer = 0.0
 
         # ==========================
         # Preview frame voorbereiden (alleen als SHOW_PREVIEW aan)
