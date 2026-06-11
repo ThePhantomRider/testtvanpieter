@@ -51,14 +51,16 @@ THROTTLE_TURN = 0.5         # tijdens sturen langzamer
 lower_blue = np.array([92, 22, 135])
 upper_blue = np.array([153, 79, 159])
 
-# Oranje - opgemeten op de baan
-# LET OP: dit bereik is breed in Hue (0-65) en omvat ook rood (H ~0-10).
-# Met alleen blauw + oranje op de baan is dat geen probleem. Maar zodra de
-# RODE paaltjes erbij komen (onderdeel 2), worden die als oranje gezien.
-# Dan dit bereik aan de lage kant strakker maken of detectie naar een ROI
-# beperken. Voor onderdeel 1 (alleen lijnen) werkt dit zoals opgemeten.
-lower_orange = np.array([0, 58, 166])
-upper_orange = np.array([65, 140, 206])
+# Oranje - opgemeten op de baan. TWEE bereiken die met OR gecombineerd
+# worden: door de fisheye/roze hue ziet de camera oranje op sommige plekken
+# net anders. Bereik A pakt de ene situatie, bereik B de andere; samen
+# (A OR B) dekken ze alle oranje. Beide opgemeten met de andere kleuren in
+# beeld, dus geen overlap met blauw/rood/groen.
+lower_orange_a = np.array([0, 58, 166])
+upper_orange_a = np.array([65, 140, 206])
+
+lower_orange_b = np.array([0, 28, 124])
+upper_orange_b = np.array([155, 255, 144])
 
 # ==========================
 # Camera pipeline
@@ -172,7 +174,11 @@ def control_thread():
         # Maskers maken
         # ==========================
         mask_blue = cv2.inRange(hsv, lower_blue, upper_blue)
-        mask_orange = cv2.inRange(hsv, lower_orange, upper_orange)
+
+        # Oranje uit twee bereiken (A OR B) - zie uitleg bij de HSV-waarden
+        mask_orange_a = cv2.inRange(hsv, lower_orange_a, upper_orange_a)
+        mask_orange_b = cv2.inRange(hsv, lower_orange_b, upper_orange_b)
+        mask_orange = cv2.bitwise_or(mask_orange_a, mask_orange_b)
 
         # ==========================
         # ROI: bovenste helft van het beeld negeren.
@@ -215,8 +221,8 @@ def control_thread():
 
             else:
                 # Oranje onder, blauw boven -> bocht naar RECHTS
-                steering = STEER_TURN
-                throttle = -THROTTLE_TURN
+                steering = -STEER_TURN
+                throttle = THROTTLE_TURN
                 action_label = "ORANJE->BLAUW -> BOCHT RECHTS"
 
         # ==========================
