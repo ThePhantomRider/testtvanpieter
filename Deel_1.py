@@ -56,9 +56,13 @@ TURN_SLEEP = 0.3
 # HSV kleurwaarden (opgemeten met hsv_kalibratie_dubbel.py, Blur=1)
 # OpenCV-schaal H 0-179, S/V 0-255
 # ==========================
-# Donkerblauw - opgemeten op de baan
-lower_blue = np.array([92, 22, 135])
-upper_blue = np.array([153, 79, 159])
+# Donkerblauw - opgemeten op de baan. TWEE bereiken (A OR B), net als oranje,
+# omdat de camera donkerblauw op sommige plekken net anders ziet.
+lower_blue_a = np.array([92, 22, 135])
+upper_blue_a = np.array([153, 79, 159])
+
+lower_blue_b = np.array([92, 31, 81])
+upper_blue_b = np.array([153, 92, 106])
 
 # Oranje - opgemeten op de baan. TWEE bereiken die met OR gecombineerd
 # worden: door de fisheye/roze hue ziet de camera oranje op sommige plekken
@@ -68,8 +72,8 @@ upper_blue = np.array([153, 79, 159])
 lower_orange_a = np.array([0, 58, 166])
 upper_orange_a = np.array([65, 140, 206])
 
-lower_orange_b = np.array([0, 28, 124])
-upper_orange_b = np.array([155, 255, 144])
+lower_orange_b = np.array([0, 45, 124])
+upper_orange_b = np.array([30, 199, 152])
 
 # ==========================
 # Camera pipeline
@@ -186,7 +190,10 @@ def control_thread():
         # ==========================
         # Maskers maken
         # ==========================
-        mask_blue = cv2.inRange(hsv, lower_blue, upper_blue)
+        # Donkerblauw uit twee bereiken (A OR B) - zie uitleg bij de HSV-waarden
+        mask_blue_a = cv2.inRange(hsv, lower_blue_a, upper_blue_a)
+        mask_blue_b = cv2.inRange(hsv, lower_blue_b, upper_blue_b)
+        mask_blue = cv2.bitwise_or(mask_blue_a, mask_blue_b)
 
         # Oranje uit twee bereiken (A OR B) - zie uitleg bij de HSV-waarden
         mask_orange_a = cv2.inRange(hsv, lower_orange_a, upper_orange_a)
@@ -232,16 +239,16 @@ def control_thread():
             valid_turn = True
 
             if blue_y > orange_y:
-                # Blauw onder, oranje boven -> bocht naar LINKS
-                steering = -STEER_TURN
-                throttle = THROTTLE_TURN
-                action_label = "BLAUW->ORANJE -> BOCHT LINKS"
-
-            else:
-                # Oranje onder, blauw boven -> bocht naar RECHTS
+                # Blauw onder, oranje boven -> bocht naar RECHTS
                 steering = STEER_TURN
                 throttle = THROTTLE_TURN
-                action_label = "ORANJE->BLAUW -> BOCHT RECHTS"
+                action_label = "BLAUW->ORANJE -> BOCHT RECHTS"
+
+            else:
+                # Oranje onder, blauw boven -> bocht naar LINKS
+                steering = -STEER_TURN
+                throttle = THROTTLE_TURN
+                action_label = "ORANJE->BLAUW -> BOCHT LINKS"
 
             # Richting onthouden voor de afronding straks
             last_steer = steering
