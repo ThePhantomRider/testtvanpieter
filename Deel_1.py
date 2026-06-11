@@ -175,6 +175,16 @@ def control_thread():
         mask_orange = cv2.inRange(hsv, lower_orange, upper_orange)
 
         # ==========================
+        # ROI: bovenste helft van het beeld negeren.
+        # Alles boven y = h/2 op zwart zetten zodat alleen de onderste helft
+        # meetelt voor de detectie. De y-coordinaten blijven kloppen met het
+        # hele beeld, dus de onder/boven-volgorde-logica verandert niet.
+        # ==========================
+        roi_top = h // 2
+        mask_blue[0:roi_top, :] = 0
+        mask_orange[0:roi_top, :] = 0
+
+        # ==========================
         # Gemiddelde y-positie per kleur bepalen
         # ==========================
         blue_y, blue_count = mask_position(mask_blue)
@@ -199,14 +209,14 @@ def control_thread():
 
             if blue_y > orange_y:
                 # Blauw onder, oranje boven -> bocht naar LINKS
-                steering = -STEER_TURN
+                steering = STEER_TURN
                 throttle = THROTTLE_TURN
                 action_label = "BLAUW->ORANJE -> BOCHT LINKS"
 
             else:
                 # Oranje onder, blauw boven -> bocht naar RECHTS
                 steering = STEER_TURN
-                throttle = THROTTLE_TURN
+                throttle = -THROTTLE_TURN
                 action_label = "ORANJE->BLAUW -> BOCHT RECHTS"
 
         # ==========================
@@ -222,6 +232,14 @@ def control_thread():
         # Preview frame voorbereiden (alleen als SHOW_PREVIEW aan)
         # ==========================
         if SHOW_PREVIEW:
+
+            # Genegeerde bovenhelft donkerder maken + grens aangeven
+            frame[0:roi_top, :] = (frame[0:roi_top, :] * 0.4).astype(np.uint8)
+            cv2.line(frame, (0, roi_top), (w, roi_top), (0, 255, 255), 2)
+            cv2.putText(
+                frame, "genegeerd", (10, roi_top - 8),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1
+            )
 
             # Blauwe pixels markeren (blauwe overlay waar gedetecteerd)
             frame[mask_blue > 0] = (255, 0, 0)
